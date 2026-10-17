@@ -1,0 +1,375 @@
+openapi: 3.0.3
+info:
+  title: Translation Management Service API
+  version: 1.0.0
+  description: |
+    API to manage translations for multiple locales, tag them (mobile, desktop, web), search them
+    and export them as JSON for frontend apps (Vue, React etc).
+
+    First call **/auth/login** (or /auth/register), then click **Authorize** and paste the token.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, example: Ali Khan }
+                email: { type: string, example: ali@example.com }
+                password: { type: string, example: password123 }
+      responses:
+        '201': { $ref: '#/components/responses/AuthResponse' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and get a JWT token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, example: admin@example.com }
+                password: { type: string, example: password123 }
+      responses:
+        '200': { $ref: '#/components/responses/AuthResponse' }
+        '401': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Logged in user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /locales:
+    get:
+      tags: [Locales]
+      summary: List all locales
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data: { type: array, items: { $ref: '#/components/schemas/Locale' } }
+    post:
+      tags: [Locales]
+      summary: Add a new locale (language)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name]
+              properties:
+                code: { type: string, example: de }
+                name: { type: string, example: German }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data: { $ref: '#/components/schemas/Locale' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /tags:
+    get:
+      tags: [Tags]
+      summary: List all tags
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data: { type: array, items: { $ref: '#/components/schemas/Tag' } }
+    post:
+      tags: [Tags]
+      summary: Create a tag
+      description: Tags are also created automatically when used in a translation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: mobile }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data: { $ref: '#/components/schemas/Tag' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /translations:
+    get:
+      tags: [Translations]
+      summary: Search translations
+      description: All filters are optional and combined with AND. `tags` matches any of the given tags.
+      parameters:
+        - { name: key, in: query, schema: { type: string }, example: auth. }
+        - { name: content, in: query, schema: { type: string }, example: sign in }
+        - { name: tags, in: query, schema: { type: string }, example: 'web,mobile' }
+        - { name: locale, in: query, schema: { type: string }, description: Search content only in this locale }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data: { type: array, items: { $ref: '#/components/schemas/Translation' } }
+                  pagination:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+                      totalPages: { type: integer }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [Translations]
+      summary: Create a translation key with its translations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TranslationInput' }
+      responses:
+        '201': { $ref: '#/components/responses/TranslationResponse' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /translations/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Translations]
+      summary: Get a translation by id
+      responses:
+        '200': { $ref: '#/components/responses/TranslationResponse' }
+        '404': { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Translations]
+      summary: Update a translation
+      description: |
+        Send only the fields you want to change. `tags` replaces the existing tags.
+        In `translations`, set a locale to `null` to remove it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key: { type: string }
+                description: { type: string, nullable: true }
+                tags: { type: array, items: { type: string } }
+                translations:
+                  type: object
+                  additionalProperties: { type: string, nullable: true }
+                  example: { en: Log in, fr: null }
+      responses:
+        '200': { $ref: '#/components/responses/TranslationResponse' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Translations]
+      summary: Delete a translation key and all its translations
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /export/{locale}:
+    get:
+      tags: [Export]
+      summary: Export all translations of a locale as JSON
+      description: |
+        Returns a flat object `{ "key": "value" }`. For vue-i18n use the `flatJson: true` option.
+        Data is always up to date. Send the `ETag` back in `If-None-Match` to get `304` when nothing changed.
+      parameters:
+        - { name: locale, in: path, required: true, schema: { type: string }, example: en }
+        - { name: tags, in: query, schema: { type: string }, example: web }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: string }
+              example:
+                auth.login.title: Sign in
+                cart.empty: Your cart is empty
+        '304': { description: Not modified }
+        '404': { $ref: '#/components/responses/Error' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        created_at: { type: string, format: date-time }
+    Locale:
+      type: object
+      properties:
+        id: { type: integer }
+        code: { type: string, example: en }
+        name: { type: string, example: English }
+    Tag:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string, example: web }
+    Translation:
+      type: object
+      properties:
+        id: { type: integer }
+        key: { type: string, example: auth.login.title }
+        description: { type: string, nullable: true }
+        translations:
+          type: object
+          additionalProperties: { type: string }
+          example: { en: Sign in, fr: Se connecter }
+        tags: { type: array, items: { type: string }, example: [mobile, web] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TranslationInput:
+      type: object
+      required: [key]
+      properties:
+        key: { type: string, example: auth.login.title }
+        description: { type: string, example: Login page title }
+        tags: { type: array, items: { type: string }, example: [web, mobile] }
+        translations:
+          type: object
+          additionalProperties: { type: string }
+          example: { en: Sign in, fr: Se connecter }
+
+  responses:
+    AuthResponse:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean }
+              message: { type: string }
+              data:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  token: { type: string }
+    TranslationResponse:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean }
+              message: { type: string }
+              data: { $ref: '#/components/schemas/Translation' }
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, example: false }
+              message: { type: string }
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, example: false }
+              message: { type: string, example: Validation error }
+              errors:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    field: { type: string }
+                    message: { type: string }
